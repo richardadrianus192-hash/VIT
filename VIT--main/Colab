@@ -1,0 +1,65 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyMPOWECApnWQq6KGjHJFrg6",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/Anselemcrizy/VIT-v4/blob/main/Colab\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "kbZkfAsp6L9A"
+      },
+      "outputs": [],
+      "source": [
+        "# review the app features"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "47fbef73",
+        "outputId": "15501ff1-b17e-4e5d-ee4b-dfbec7aac245"
+      },
+      "source": [
+        "!gh repo clone Anselemcrizy/VIT-v4"
+      ],
+      "execution_count": 3,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "To get started with GitHub CLI, please run:  gh auth login\n",
+            "Alternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
