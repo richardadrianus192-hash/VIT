@@ -1,2 +1,11 @@
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+ENABLE_SCRAPING = "false"
+ENABLE_ODDS = "false"
+LOG_LEVEL = "INFO"
+AUTH_ENABLED = "false"
+REDIS_URL = "memory://"
