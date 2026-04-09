@@ -15,6 +15,7 @@
 
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -29,6 +30,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.config import get_env
 from app.services.market_utils import MarketUtils
@@ -38,6 +40,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 orchestrator    = None
+
+
+def create_request_hash(home: str, away: str, league: str, kickoff_time: str) -> str:
+    try:
+        kickoff_dt = datetime.fromisoformat(kickoff_time.replace("Z", "+00:00"))
+    except Exception:
+        kickoff_dt = datetime.now()
+
+    content = {
+        "home_team": home,
+        "away_team": away,
+        "kickoff_time": kickoff_dt.isoformat(),
+        "league": league,
+    }
+    return hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()[:32]
+
 telegram_alerts = None
 
 VERSION = "2.3.0"
@@ -846,7 +864,31 @@ async def stream_predictions(
                 kickoff_dt = datetime.fromisoformat(fixture["kickoff_time"].replace("Z", "+00:00")).replace(tzinfo=None)
 
                 match_id = None
+                request_hash = create_request_hash(home, away, fixture["league"], fixture["kickoff_time"])
                 async with AsyncSessionLocal() as db:
+                    existing_pred = await db.execute(select(Prediction).where(Prediction.request_hash == request_hash))
+                    if existing_pred.scalar_one_or_none():
+                        yield sse({
+                            "type": "status",
+                            "message": f"Skipping existing fixture: {home} vs {away} ({fixture['kickoff_time']})",
+                        })
+                        continue
+
+                    existing_match = await db.execute(
+                        select(Match).where(
+                            Match.home_team == home,
+                            Match.away_team == away,
+                            Match.league == fixture["league"],
+                            Match.kickoff_time == kickoff_dt,
+                        )
+                    )
+                    if existing_match.scalar_one_or_none():
+                        yield sse({
+                            "type": "status",
+                            "message": f"Skipping existing fixture: {home} vs {away} ({fixture['kickoff_time']})",
+                        })
+                        continue
+
                     db_match = Match(
                         home_team=home, away_team=away,
                         league=fixture["league"], kickoff_time=kickoff_dt,
@@ -858,6 +900,7 @@ async def stream_predictions(
                     await db.flush()
 
                     pred_obj = Prediction(
+                        request_hash=request_hash,
                         match_id=db_match.id,
                         home_prob=home_prob, draw_prob=draw_prob, away_prob=away_prob,
                         over_25_prob=over_25, btts_prob=btts,

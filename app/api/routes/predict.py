@@ -123,21 +123,33 @@ async def predict(
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
 
     idempotency_key = create_idempotency_key(match)
+    naive_kickoff = to_naive_utc(match.kickoff_time)
 
     try:
-        # --- Idempotency check ---
+        # --- Duplicate check ---
         existing = await db.execute(
             select(Prediction).where(Prediction.request_hash == idempotency_key)
         )
         existing_pred = existing.scalar_one_or_none()
         if existing_pred:
-            logger.info(f"Returning cached prediction {idempotency_key[:8]}...")
-            match_result = await db.execute(select(Match).where(Match.id == existing_pred.match_id))
-            db_match = match_result.scalar_one_or_none()
-            if db_match:
-                return build_prediction_response(existing_pred, db_match)
+            raise HTTPException(
+                status_code=409,
+                detail="Match already exists in history; duplicate predictions are not allowed."
+            )
 
-        naive_kickoff = to_naive_utc(match.kickoff_time)
+        existing_match = await db.execute(
+            select(Match).where(
+                Match.home_team == match.home_team,
+                Match.away_team == match.away_team,
+                Match.league == match.league,
+                Match.kickoff_time == naive_kickoff,
+            )
+        )
+        if existing_match.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail="Match already exists in history; duplicate predictions are not allowed."
+            )
 
         # --- Save match ---
         db_match = Match(
