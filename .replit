@@ -99,4 +99,4 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["gitFull", "glibcLocales", "libxcrypt", "pkg-config", "playwright-driver", "postgresql", "xcodebuild", "xsimd", "zlib"]
+packages = ["gitFull", "glibcLocales", "libxcrypt", "pkg-config", "playwright-driver", "postgresql", "xcodebuild", "xsimd", "zlib", "nix-output-monitor"]

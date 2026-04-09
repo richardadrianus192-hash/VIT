@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
         football_api_key = os.getenv("FOOTBALL_DATA_API_KEY", "")
         odds_api_key     = os.getenv("ODDS_API_KEY", "") or os.getenv("THE_ODDS_API_KEY", "")
         data_loader = DataLoader(
-            football_api_key=football_api_key,
+            api_key=football_api_key,
             odds_api_key=odds_api_key,
             enable_scraping=get_env("ENABLE_SCRAPING", "true").lower() == "true",
             enable_odds=get_env("ENABLE_ODDS", "true").lower() == "true",
