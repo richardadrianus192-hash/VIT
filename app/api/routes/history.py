@@ -175,6 +175,20 @@ async def get_match_detail(match_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
 
     insights = row.Prediction.model_insights or []
+    if not insights and row.Prediction.model_weights:
+        weights = row.Prediction.model_weights or {}
+        insights = [
+            {
+                "model_name": name,
+                "model_type": "Unknown",
+                "model_weight": float(weight or 0),
+                "supported_markets": [],
+                "confidence": {"1x2": 0.5, "over_under": 0.5, "btts": 0.5},
+                "latency_ms": None,
+                "failed": False,
+            }
+            for name, weight in weights.items()
+        ]
     active_models = [m for m in insights if not m.get("failed")]
 
     def market_breakdown(market_key, prob_fields):

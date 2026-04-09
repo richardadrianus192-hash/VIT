@@ -98,6 +98,11 @@ class ModelOrchestrator:
                         self.model_status[key] = {"status": "failed", "error": str(exc), "load_time_ms": 0}
                         results[key] = False
                         continue
+                else:
+                    logger.warning(f"⚠️  {key} ({model_type}) weight file missing: {model_path}")
+                    self.model_status[key] = {"status": "failed", "error": "weights missing", "load_time_ms": 0}
+                    results[key] = False
+                    continue
                 self.models[key] = instance
                 weight = getattr(instance, "weight", 1.0)
                 self.model_meta[key] = {

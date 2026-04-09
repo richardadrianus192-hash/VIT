@@ -96,14 +96,19 @@ function MarketSection({ title, icon, probs, breakdown }) {
           <ProbBar key={label} label={label} value={value} color={color} />
         ))}
       </div>
-      {open && breakdown && breakdown.length > 0 && (
+      {open && breakdown && breakdown.length > 0 ? (
         <div className="model-breakdown">
           <h5 className="breakdown-title">Child Model Ratings</h5>
           {breakdown.map((m, i) => (
             <ModelCard key={i} model={m} />
           ))}
         </div>
-      )}
+      ) : open ? (
+        <div className="model-breakdown empty-state">
+          <h5 className="breakdown-title">Child Model Ratings</h5>
+          <p>No per-model breakdown is available for this market.</p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -146,6 +151,12 @@ export default function MatchDetail({ matchId, onClose }) {
   const marketsData = markets || {}
   const edgePct = ((prediction.edge || 0) * 100).toFixed(2)
   const edgePos = (prediction.edge || 0) > 0
+  const confidenceValue = typeof prediction.confidence === 'object'
+    ? (prediction.confidence?.['1x2'] ?? 0)
+    : (prediction.confidence ?? 0)
+  const modelTotal = model_summary.total_models || (model_summary.models?.length || 0)
+  const modelActive = model_summary.active_models || (model_summary.models?.filter(m => !m.failed).length || 0)
+  const showModelSummary = Array.isArray(model_summary.models) && model_summary.models.length > 0
 
   return (
     <div className="detail-overlay" onClick={onClose}>
@@ -195,11 +206,13 @@ export default function MatchDetail({ matchId, onClose }) {
           </div>
           <div className="stat-chip">
             <span className="stat-label">Confidence</span>
-            <span className="stat-value">{((prediction.confidence || 0) * 100).toFixed(0)}%</span>
+            <span className="stat-value">{(confidenceValue * 100).toFixed(0)}%</span>
           </div>
           <div className="stat-chip">
             <span className="stat-label">Models</span>
-            <span className="stat-value">{model_summary.active_models}/{model_summary.total_models}</span>
+            <span className="stat-value">
+              {modelTotal > 0 ? `${modelActive}/${modelTotal}` : 'N/A'}
+            </span>
           </div>
         </div>
 
@@ -262,33 +275,39 @@ export default function MatchDetail({ matchId, onClose }) {
         {/* Model Summary Table */}
         <div className="model-summary-section">
           <h4>📊 Model Summary</h4>
-          <div className="model-summary-grid">
-            {model_summary.models.map((m, i) => (
-              <div
-                key={i}
-                className={`model-summary-row ${m.failed ? 'failed' : ''}`}
-                style={{ borderLeft: `3px solid ${MODEL_TYPE_COLORS[m.type] || '#64748b'}` }}
-              >
-                <div className="msrow-name">
-                  <span className="model-type-badge" style={{ background: MODEL_TYPE_COLORS[m.type] || '#64748b', fontSize: '0.7rem' }}>
-                    {m.type}
-                  </span>
-                  <span>{m.name}</span>
+          {showModelSummary ? (
+            <div className="model-summary-grid">
+              {model_summary.models.map((m, i) => (
+                <div
+                  key={i}
+                  className={`model-summary-row ${m.failed ? 'failed' : ''}`}
+                  style={{ borderLeft: `3px solid ${MODEL_TYPE_COLORS[m.type] || '#64748b'}` }}
+                >
+                  <div className="msrow-name">
+                    <span className="model-type-badge" style={{ background: MODEL_TYPE_COLORS[m.type] || '#64748b', fontSize: '0.7rem' }}>
+                      {m.type}
+                    </span>
+                    <span>{m.name}</span>
+                  </div>
+                  <div className="msrow-ratings">
+                    <span title="1X2 Confidence">1X2: <strong style={{ color: ratingColor((m.confidence_1x2 || 0.5) * 10) }}>{((m.confidence_1x2 || 0.5) * 10).toFixed(1)}</strong></span>
+                    <span title="O/U Confidence">O/U: <strong style={{ color: ratingColor((m.confidence_ou || 0.5) * 10) }}>{((m.confidence_ou || 0.5) * 10).toFixed(1)}</strong></span>
+                    <span title="BTTS Confidence">BTTS: <strong style={{ color: ratingColor((m.confidence_btts || 0.5) * 10) }}>{((m.confidence_btts || 0.5) * 10).toFixed(1)}</strong></span>
+                  </div>
+                  <div className="msrow-markets">
+                    {(m.markets || []).map((mkt, mi) => (
+                      <span key={mi} className="market-chip">{marketLabel(mkt)}</span>
+                    ))}
+                  </div>
+                  {m.failed && <span className="failed-badge">FAILED</span>}
                 </div>
-                <div className="msrow-ratings">
-                  <span title="1X2 Confidence">1X2: <strong style={{ color: ratingColor((m.confidence_1x2 || 0.5) * 10) }}>{((m.confidence_1x2 || 0.5) * 10).toFixed(1)}</strong></span>
-                  <span title="O/U Confidence">O/U: <strong style={{ color: ratingColor((m.confidence_ou || 0.5) * 10) }}>{((m.confidence_ou || 0.5) * 10).toFixed(1)}</strong></span>
-                  <span title="BTTS Confidence">BTTS: <strong style={{ color: ratingColor((m.confidence_btts || 0.5) * 10) }}>{((m.confidence_btts || 0.5) * 10).toFixed(1)}</strong></span>
-                </div>
-                <div className="msrow-markets">
-                  {(m.markets || []).map((mkt, mi) => (
-                    <span key={mi} className="market-chip">{marketLabel(mkt)}</span>
-                  ))}
-                </div>
-                {m.failed && <span className="failed-badge">FAILED</span>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="model-summary-empty">
+              <p>No per-model summary is available for this prediction.</p>
+            </div>
+          )}
         </div>
 
         {/* CLV Section */}
