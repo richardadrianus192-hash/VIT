@@ -431,7 +431,19 @@ class LSTMMomentumNetworkModel(BaseModel):
             return {"error": "No training data"}
         
         # Sort by date globally
-        matches_sorted = sorted(matches, key=lambda x: x.get('match_date', '1900-01-01'))
+        def get_date_key(match):
+            date_str = match.get('match_date', '1900-01-01')
+            if isinstance(date_str, str):
+                try:
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except:
+                    return datetime.min
+            elif isinstance(date_str, datetime):
+                return date_str
+            else:
+                return datetime.min
+        
+        matches_sorted = sorted(matches, key=get_date_key)
         
         # Time-based split - split at match level, not sequence level
         split_idx = int(len(matches_sorted) * (1 - validation_split))
@@ -605,9 +617,9 @@ class LSTMMomentumNetworkModel(BaseModel):
             X_tensor = torch.FloatTensor(X_train).to(device)
             out_1x2, out_ou, out_btts = self.model(X_tensor)
             
-            probs_1x2 = torch.softmax(out_1x2, dim=1).cpu().numpy()
-            probs_ou = torch.softmax(out_ou, dim=1).cpu().numpy()
-            probs_btts = torch.softmax(out_btts, dim=1).cpu().numpy()
+            probs_1x2 = torch.softmax(out_1x2, dim=1).cpu().detach().numpy()
+            probs_ou = torch.softmax(out_ou, dim=1).cpu().detach().numpy()
+            probs_btts = torch.softmax(out_btts, dim=1).cpu().detach().numpy()
         
         # Calibrate 1X2 (use max probability as feature)
         self.calibrator_1x2 = IsotonicRegression(out_of_bounds='clip')
@@ -639,7 +651,7 @@ class LSTMMomentumNetworkModel(BaseModel):
         with torch.no_grad():
             X_tensor = torch.FloatTensor(X_val).to(device)
             out_1x2, out_ou, out_btts = self.model(X_tensor)
-            probs = torch.softmax(out_1x2, dim=1).cpu().numpy()
+            probs = torch.softmax(out_1x2, dim=1).cpu().detach().numpy()
         
         y_pred = np.argmax(probs, axis=1)
         accuracy = np.mean(y_pred == y_val_1x2)

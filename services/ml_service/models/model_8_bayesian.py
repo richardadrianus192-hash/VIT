@@ -341,7 +341,19 @@ class BayesianHierarchicalModel(BaseModel):
             return {"error": "No training data"}
 
         # Sort by date
-        matches_sorted = sorted(matches, key=lambda x: x.get('match_date', datetime.min))
+        def get_date_key(match):
+            date_str = match.get('match_date', '1900-01-01')
+            if isinstance(date_str, str):
+                try:
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except:
+                    return datetime.min
+            elif isinstance(date_str, datetime):
+                return date_str
+            else:
+                return datetime.min
+        
+        matches_sorted = sorted(matches, key=get_date_key)
 
         # Time-based split
         split_idx = int(len(matches_sorted) * (1 - validation_split))

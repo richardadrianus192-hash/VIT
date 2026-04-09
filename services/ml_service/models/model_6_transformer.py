@@ -506,7 +506,19 @@ class TransformerSequenceModel(BaseModel):
         Each match appears in training OR validation, not both.
         """
         # Sort matches chronologically
-        matches_sorted = sorted(matches, key=lambda x: x.get('match_date', datetime.min))
+        def get_date_key(match):
+            date_str = match.get('match_date', '1900-01-01')
+            if isinstance(date_str, str):
+                try:
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except:
+                    return datetime.min
+            elif isinstance(date_str, datetime):
+                return date_str
+            else:
+                return datetime.min
+        
+        matches_sorted = sorted(matches, key=get_date_key)
 
         # Group by team, maintaining temporal order
         team_sequences: Dict[str, List[Dict]] = defaultdict(list)
@@ -637,7 +649,19 @@ class TransformerSequenceModel(BaseModel):
             return {"error": "No training data"}
 
         # Sort by date
-        matches_sorted = sorted(matches, key=lambda x: x.get('match_date', datetime.min))
+        def get_date_key(match):
+            date_str = match.get('match_date', '1900-01-01')
+            if isinstance(date_str, str):
+                try:
+                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except:
+                    return datetime.min
+            elif isinstance(date_str, datetime):
+                return date_str
+            else:
+                return datetime.min
+        
+        matches_sorted = sorted(matches, key=get_date_key)
 
         # Time-based split (no leakage)
         split_idx = int(len(matches_sorted) * (1 - validation_split))
@@ -843,11 +867,11 @@ class TransformerSequenceModel(BaseModel):
             logits_1x2, logits_ou, logits_btts, attn_weights = self.model(X_tensor, t_tensor, m_tensor)
 
             # Apply softmax for probabilities
-            probs_1x2 = F.softmax(logits_1x2, dim=1).cpu().numpy()[0]
-            probs_ou = F.softmax(logits_ou, dim=1).cpu().numpy()[0]
-            probs_btts = F.softmax(logits_btts, dim=1).cpu().numpy()[0]
+            probs_1x2 = F.softmax(logits_1x2, dim=1).cpu().detach().numpy()[0]
+            probs_ou = F.softmax(logits_ou, dim=1).cpu().detach().numpy()[0]
+            probs_btts = F.softmax(logits_btts, dim=1).cpu().detach().numpy()[0]
 
-            self.last_attention_weights = attn_weights.cpu().numpy()
+            self.last_attention_weights = attn_weights.cpu().detach().numpy()
 
         # Map outputs (0=away, 1=draw, 2=home)
         home_prob = float(probs_1x2[2])

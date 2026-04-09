@@ -166,7 +166,7 @@ class ContinuousActorCritic(_NNBase):
         # Clamp action to valid range
         action = torch.clamp(action, 0, self.max_stake)
 
-        return action.squeeze().item(), log_prob, value.squeeze().item()
+        return action.squeeze().detach().item(), log_prob.detach().item(), value.squeeze().detach().item()
 
 
 class SimulatedBettingEnvironment:
