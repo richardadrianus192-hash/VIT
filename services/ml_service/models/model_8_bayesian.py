@@ -190,10 +190,7 @@ class BayesianHierarchicalModel(BaseModel):
             match_date = match.get('match_date')
             if match_date:
                 if isinstance(match_date, str):
-                    try:
-                        match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
-                    except:
-                        match_date = current_date
+                    match_date = self.parse_datetime(match_date) or current_date
             else:
                 match_date = current_date
             match_dates.append(match_date)
@@ -329,6 +326,68 @@ class BayesianHierarchicalModel(BaseModel):
 
         return model
 
+    def _bayesian_fallback_training(
+        self,
+        train_matches: List[Dict[str, Any]],
+        val_matches: List[Dict[str, Any]],
+        n_teams: int,
+        n_leagues: int
+    ) -> Dict[str, Any]:
+        """Fallback training when PyMC sampling is unavailable or fails."""
+        from collections import defaultdict
+
+        logger.warning("Using Bayesian fallback: simple time-decay Poisson approximation.")
+        team_stats = defaultdict(lambda: {"gf": 0.0, "ga": 0.0, "matches": 0})
+
+        for match in train_matches:
+            home = match['home_team']
+            away = match['away_team']
+            hg = float(match.get('home_goals', 0))
+            ag = float(match.get('away_goals', 0))
+
+            team_stats[home]['gf'] += hg
+            team_stats[home]['ga'] += ag
+            team_stats[home]['matches'] += 1
+
+            team_stats[away]['gf'] += ag
+            team_stats[away]['ga'] += hg
+            team_stats[away]['matches'] += 1
+
+        self.team_attack = {}
+        self.team_defence = {}
+        for team, stats in team_stats.items():
+            m = max(stats['matches'], 1)
+            self.team_attack[team] = float(np.log(max(0.1, stats['gf'] / m) + 0.1))
+            self.team_defence[team] = float(np.log(max(0.1, stats['ga'] / m) + 0.1))
+
+        self.posterior_attack = None
+        self.posterior_defence = None
+        self.posterior_home_advantage = None
+        self.home_advantage = 0.2
+        self._compute_league_scaling(train_matches)
+
+        self.trained_matches_count = len(train_matches)
+        val_metrics = self._validate_on_holdout(val_matches)
+
+        return {
+            "model_type": self.model_type,
+            "version": self.version,
+            "matches_trained": self.trained_matches_count,
+            "matches_validated": len(val_matches),
+            "validation_accuracy": val_metrics.get('accuracy', 0),
+            "validation_log_loss": val_metrics.get('log_loss', 0),
+            "validation_brier_score": val_metrics.get('brier_score', 0),
+            "waic": None,
+            "loo": None,
+            "n_teams": n_teams,
+            "n_leagues": n_leagues,
+            "num_chains": self.config.num_chains,
+            "num_samples": self.config.num_samples,
+            "hierarchical_levels": self.config.hierarchical_levels,
+            "time_decay_tau": self.config.time_decay_tau,
+            "fallback": True
+        }
+
     def train(
         self,
         matches: List[Dict[str, Any]],
@@ -344,10 +403,8 @@ class BayesianHierarchicalModel(BaseModel):
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
             if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
+                parsed = self.parse_datetime(date_str)
+                return parsed or datetime.min
             elif isinstance(date_str, datetime):
                 return date_str
             else:
@@ -379,52 +436,60 @@ class BayesianHierarchicalModel(BaseModel):
         )
 
         # Sample from posterior
+        if not PYMC_AVAILABLE:
+            logger.warning("PyMC unavailable: using fallback Bayesian approximation.")
+            return self._bayesian_fallback_training(train_matches, val_matches, n_teams, n_leagues)
+
         logger.info("Sampling from posterior...")
-        with self.model:
-            self.trace = pm.sample(
-                draws=self.config.num_samples,
-                tune=self.config.num_tune,
-                chains=self.config.num_chains,
-                target_accept=self.config.target_accept,
-                max_treedepth=self.config.max_treedepth,
-                random_seed=self.config.seed,
-                return_inferencedata=True
-            )
+        try:
+            with self.model:
+                self.trace = pm.sample(
+                    draws=self.config.num_samples,
+                    tune=self.config.num_tune,
+                    chains=self.config.num_chains,
+                    target_accept=self.config.target_accept,
+                    max_treedepth=self.config.max_treedepth,
+                    random_seed=self.config.seed,
+                    return_inferencedata=True
+                )
 
-        # Extract posterior means and uncertainties
-        self._extract_posterior_means()
+            # Extract posterior means and uncertainties
+            self._extract_posterior_means()
 
-        # Compute league scaling factors
-        self._compute_league_scaling(val_matches)
+            # Compute league scaling factors
+            self._compute_league_scaling(val_matches)
 
-        # Validate on holdout
-        val_metrics = self._validate_on_holdout(val_matches)
+            # Validate on holdout
+            val_metrics = self._validate_on_holdout(val_matches)
 
-        # Calculate WAIC for model comparison
-        waic = az.waic(self.trace)
-        loo = az.loo(self.trace)
+            # Calculate WAIC for model comparison
+            waic = az.waic(self.trace)
+            loo = az.loo(self.trace)
 
-        self.trained_matches_count = len(train_matches)
+            self.trained_matches_count = len(train_matches)
 
-        logger.info(f"Training complete. WAIC: {waic.waic:.2f}")
+            logger.info(f"Training complete. WAIC: {waic.waic:.2f}")
 
-        return {
-            "model_type": self.model_type,
-            "version": self.version,
-            "matches_trained": self.trained_matches_count,
-            "matches_validated": len(val_matches),
-            "validation_accuracy": val_metrics.get('accuracy', 0),
-            "validation_log_loss": val_metrics.get('log_loss', 0),
-            "validation_brier_score": val_metrics.get('brier_score', 0),
-            "waic": float(waic.waic),
-            "loo": float(loo.loo),
-            "n_teams": n_teams,
-            "n_leagues": n_leagues,
-            "num_chains": self.config.num_chains,
-            "num_samples": self.config.num_samples,
-            "hierarchical_levels": self.config.hierarchical_levels,
-            "time_decay_tau": self.config.time_decay_tau
-        }
+            return {
+                "model_type": self.model_type,
+                "version": self.version,
+                "matches_trained": self.trained_matches_count,
+                "matches_validated": len(val_matches),
+                "validation_accuracy": val_metrics.get('accuracy', 0),
+                "validation_log_loss": val_metrics.get('log_loss', 0),
+                "validation_brier_score": val_metrics.get('brier_score', 0),
+                "waic": float(waic.waic),
+                "loo": float(loo.loo),
+                "n_teams": n_teams,
+                "n_leagues": n_leagues,
+                "num_chains": self.config.num_chains,
+                "num_samples": self.config.num_samples,
+                "hierarchical_levels": self.config.hierarchical_levels,
+                "time_decay_tau": self.config.time_decay_tau
+            }
+        except Exception as exc:
+            logger.warning(f"Bayesian sampling failed: {exc}. Falling back to approximation.")
+            return self._bayesian_fallback_training(train_matches, val_matches, n_teams, n_leagues)
 
     def _extract_posterior_means(self):
         """Extract posterior means and uncertainties."""

@@ -87,6 +87,11 @@ class OddsAPIClient:
         "serie_a": "soccer_serie_a",
         "bundesliga": "soccer_bundesliga",
         "ligue_1": "soccer_ligue_one",
+        "championship": "soccer_efl_champ",
+        "eredivisie": "soccer_eredivisie",
+        "primeira_liga": "soccer_primeira_liga",
+        "scottish_premiership": "soccer_scottish_premiership",
+        "belgian_pro_league": "soccer_jupiler_pro_league",
         "champions_league": "soccer_uefa_champs_league",
         "europa_league": "soccer_uefa_europa_league",
     }

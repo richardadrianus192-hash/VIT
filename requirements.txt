@@ -26,3 +26,4 @@ aiosqlite
 alembic
 asyncpg
 python-dotenv
+python-multipart

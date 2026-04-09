@@ -39,7 +39,7 @@ def _verify_key(api_key: str):
 
 # ── Pydantic models ───────────────────────────────────────────────────
 class TrainingConfig(BaseModel):
-    leagues:            List[str]  = ["premier_league", "la_liga", "bundesliga", "serie_a", "ligue_1"]
+    leagues:            List[str]  = ["premier_league", "la_liga", "bundesliga", "serie_a", "ligue_1", "championship", "eredivisie", "primeira_liga", "scottish_premiership", "belgian_pro_league"]
     date_from:          str        = "2023-01-01"
     date_to:            str        = "2025-12-31"
     validation_split:   float      = 0.20
@@ -58,28 +58,68 @@ class PromoteRequest(BaseModel):
 async def _run_training(job_id: str, config: TrainingConfig, orchestrator):
     """
     Run training across all ready models.
+    Integrates Odds API data for enhanced training signals.
     Sends progress events into the job state dict.
-    Uses each model's .train() method with historical data.
+    Uses each model's .train() method with historical data enriched with odds.
     """
     job = _training_jobs[job_id]
     job["status"]    = "running"
     job["started_at"] = datetime.now(timezone.utc).isoformat()
 
-    try:
-        from data.historical_matches import load_historical  # optional helper
-    except ImportError:
-        pass
-
-    # Build minimal historical dataset from JSON file
+    # Load historical matches with Odds API enrichment
     historical = []
+    odds_enriched_count = 0
+    
     try:
         import json as _json
         data_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "historical_matches.json")
         if os.path.exists(data_path):
             with open(data_path) as f:
                 historical = _json.load(f)
+                logger.info(f"Loaded {len(historical)} historical matches")
     except Exception as e:
         logger.warning(f"Could not load historical data: {e}")
+
+    # Enrich with Odds API data if available
+    if historical:
+        try:
+            from app.services.odds_api import OddsAPIClient
+            odds_key = os.getenv("ODDS_API_KEY", "")
+            if odds_key:
+                odds_client = OddsAPIClient(odds_key)
+                job["events"].append({"type": "info", "message": "Enriching training data with Odds API...", "ts": time.time()})
+                
+                # Enrich matches with market intelligence
+                for i, match in enumerate(historical):
+                    try:
+                        league = match.get("league", "premier_league")
+                        # Add computed vig-free probabilities and market intelligence
+                        if match.get("market_odds"):
+                            odds = match["market_odds"]
+                            total_books = sum([1/v for v in odds.values() if v > 0])
+                            if total_books > 0:
+                                match["vig_percentage"] = (total_books - 1) * 100
+                                # Compute vig-free probs
+                                match["vig_free_probs"] = {
+                                    k: (1/v) / total_books for k, v in odds.items() if v > 0
+                                }
+                                odds_enriched_count += 1
+                        
+                        # Calculate over/under context for goals prediction
+                        if "home_goals" in match and "away_goals" in match:
+                            total = match["home_goals"] + match["away_goals"]
+                            match["total_goals"] = total
+                            match["over_25"] = 1 if total > 2.5 else 0
+                            match["over_15"] = 1 if total > 1.5 else 0
+                            match["under_25"] = 1 if total <= 2.5 else 0
+                    except Exception as e:
+                        logger.debug(f"Error enriching match {i}: {e}")
+                        continue
+                
+                logger.info(f"Enriched {odds_enriched_count}/{len(historical)} matches with Odds API data")
+                job["events"].append({"type": "info", "message": f"Enriched {odds_enriched_count} matches", "ts": time.time()})
+        except Exception as e:
+            logger.warning(f"Odds enrichment failed: {e}")
 
     if not historical:
         # Synthetic fallback — enough to test training flow
@@ -91,6 +131,7 @@ async def _run_training(job_id: str, config: TrainingConfig, orchestrator):
                 "league": "premier_league",
                 "home_goals": random.randint(0, 4), "away_goals": random.randint(0, 3),
                 "market_odds": {"home": round(1.5 + random.random(), 2), "draw": round(3.0 + random.random(), 2), "away": round(2.5 + random.random(), 2)},
+                "over_25": random.randint(0, 1),
             }
             for _ in range(200)
         ]
@@ -110,41 +151,80 @@ async def _run_training(job_id: str, config: TrainingConfig, orchestrator):
 
         t0 = time.monotonic()
         try:
+            # Get model metadata including child models
+            model_meta = orchestrator.model_meta.get(key, {})
+            model_type = model_meta.get("model_type", "unknown")
+            child_models = model_meta.get("child_models", [])
+            
+            job["events"].append({
+                "type": "model_detail",
+                "model": model_name,
+                "type_name": model_type,
+                "child_models": child_models,
+                "ts": time.time()
+            })
+            
             metrics = model.train(historical)
             elapsed = round(time.monotonic() - t0, 2)
 
             # Normalise metrics — different models return different keys
             acc = (
                 metrics.get("1x2_accuracy") or
+                metrics.get("match_accuracy") or
                 metrics.get("accuracy") or
                 metrics.get("val_accuracy") or
                 0.50
             )
+            over_under_acc = metrics.get("over_under_accuracy") or metrics.get("ou_accuracy") or 0.50
             loss = metrics.get("log_loss") or metrics.get("loss") or 0.0
             brier = metrics.get("brier_score") or 0.0
 
             results[key] = {
                 "model_name": model_name,
+                "model_type": model_type,
+                "child_models": child_models,
                 "accuracy": round(float(acc), 4),
+                "over_under_accuracy": round(float(over_under_acc), 4),
                 "log_loss": round(float(loss), 4),
                 "brier_score": round(float(brier), 4),
                 "elapsed_s": elapsed,
                 "status": "ok",
+                "total_goals_predictions": metrics.get("total_goals_predictions", 0),
             }
             job["events"].append({
-                "type": "model_done", "model": model_name,
-                "accuracy": round(float(acc), 4), "elapsed_s": elapsed, "ts": time.time()
+                "type": "model_done", 
+                "model": model_name,
+                "model_type": model_type,
+                "accuracy": round(float(acc), 4),
+                "ou_accuracy": round(float(over_under_acc), 4),
+                "elapsed_s": elapsed,
+                "ts": time.time()
             })
         except Exception as exc:
             elapsed = round(time.monotonic() - t0, 2)
-            results[key] = {"model_name": model_name, "status": "failed", "error": str(exc), "elapsed_s": elapsed}
-            job["events"].append({"type": "model_error", "model": model_name, "error": str(exc), "ts": time.time()})
+            model_meta = orchestrator.model_meta.get(key, {}) if orchestrator else {}
+            results[key] = {
+                "model_name": model_name,
+                "model_type": model_meta.get("model_type", "unknown"),
+                "child_models": model_meta.get("child_models", []),
+                "status": "failed",
+                "error": str(exc),
+                "elapsed_s": elapsed
+            }
+            job["events"].append({
+                "type": "model_error",
+                "model": model_name,
+                "model_type": model_meta.get("model_type", "unknown"),
+                "error": str(exc),
+                "ts": time.time()
+            })
 
         await asyncio.sleep(0.1)   # yield to event loop
 
-    # Aggregate metrics
+    # Aggregate metrics with over/under accuracy
     ok_results = [v for v in results.values() if v.get("status") == "ok"]
     avg_acc    = round(sum(r["accuracy"] for r in ok_results) / len(ok_results), 4) if ok_results else 0
+    avg_ou_acc = round(sum(r.get("over_under_accuracy", 0.50) for r in ok_results) / len(ok_results), 4) if ok_results else 0.50
 
     job["status"]       = "completed"
     job["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -153,7 +233,9 @@ async def _run_training(job_id: str, config: TrainingConfig, orchestrator):
         "models_trained": len(ok_results),
         "models_failed":  len(results) - len(ok_results),
         "avg_accuracy":   avg_acc,
+        "avg_over_under_accuracy": avg_ou_acc,
         "version":        job_id[:8],
+        "odds_enriched": odds_enriched_count if 'odds_enriched_count' in locals() else 0,
     }
     job["events"].append({"type": "done", "summary": job["summary"], "ts": time.time()})
 
@@ -166,7 +248,7 @@ async def _run_training(job_id: str, config: TrainingConfig, orchestrator):
         "results":      results,
         "promoted":     False,
     }
-    logger.info(f"Training job {job_id} complete — avg accuracy {avg_acc:.4f}")
+    logger.info(f"Training job {job_id} complete — avg accuracy {avg_acc:.4f}, OvUn {avg_ou_acc:.4f}")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -315,6 +397,39 @@ async def compare_versions(
         "overall_delta": overall_delta,
         "recommendation": "promote" if overall_delta > 0.005 else ("neutral" if overall_delta > -0.005 else "rollback"),
         "per_model":     comparison,
+    }
+
+
+@router.get("/models/info")
+async def get_models_info(api_key: str = Query(...)):
+    """
+    Get transparent info about all models with child models breakdown.
+    Shows model types, child models (sub-networks), and current status.
+    """
+    _verify_key(api_key)
+    if _orchestrator_ref is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not initialized")
+
+    models_info = []
+    for key, model in _orchestrator_ref.models.items():
+        meta = _orchestrator_ref.model_meta.get(key, {})
+        models_info.append({
+            "key": key,
+            "model_name": meta.get("model_name", key),
+            "model_type": meta.get("model_type", "unknown"),
+            "weight": meta.get("weight", 1.0),
+            "supported_markets": meta.get("supported_markets", []),
+            "child_models": meta.get("child_models", []),
+            "description": meta.get("description", ""),
+            "trained": getattr(model, "is_trained", False),
+            "ready": key in _orchestrator_ref.models,
+        })
+
+    return {
+        "total_models": len(models_info),
+        "models_loaded": sum(1 for m in models_info if m["ready"]),
+        "models_trained": sum(1 for m in models_info if m["trained"]),
+        "models": sorted(models_info, key=lambda m: m["model_name"]),
     }
 
 

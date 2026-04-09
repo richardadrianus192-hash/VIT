@@ -173,15 +173,13 @@ class SentimentFusionModel(BaseModel):
         """Check if post is within pre-match window."""
         # Ensure both are datetime objects
         if isinstance(post_date, str):
-            try:
-                post_date = datetime.fromisoformat(post_date.replace('Z', '+00:00'))
-            except:
+            post_date = self.parse_datetime(post_date)
+            if post_date is None:
                 return False
         
         if isinstance(match_date, str):
-            try:
-                match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
-            except:
+            match_date = self.parse_datetime(match_date)
+            if match_date is None:
                 return False
         
         hours_before = (match_date - post_date).total_seconds() / 3600
@@ -419,10 +417,8 @@ class SentimentFusionModel(BaseModel):
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
             if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
+                parsed = self.parse_datetime(date_str)
+                return parsed or datetime.min
             elif isinstance(date_str, datetime):
                 return date_str
             else:
@@ -440,6 +436,9 @@ class SentimentFusionModel(BaseModel):
         # Process each match
         for match in train_matches:
             match_date = match.get('match_date', datetime.now())
+            if isinstance(match_date, str):
+                match_date = self.parse_datetime(match_date) or datetime.now()
+
             home_team = match.get('home_team', 'unknown')
             away_team = match.get('away_team', 'unknown')
 
@@ -450,6 +449,8 @@ class SentimentFusionModel(BaseModel):
                     text = item.get('text', '')
                     source = item.get('source', 'unknown')
                     post_date = item.get('date', match_date)
+                    if isinstance(post_date, str):
+                        post_date = self.parse_datetime(post_date) or match_date
 
                     if not self._is_pre_match(post_date, match_date):
                         continue
@@ -470,6 +471,8 @@ class SentimentFusionModel(BaseModel):
                     text = post.get('text', '')
                     source = post.get('source', 'fan')
                     post_date = post.get('date', match_date)
+                    if isinstance(post_date, str):
+                        post_date = self.parse_datetime(post_date) or match_date
 
                     if not self._is_pre_match(post_date, match_date):
                         continue

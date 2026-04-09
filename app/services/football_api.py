@@ -57,6 +57,9 @@ class FootballDataClient:
         "ligue_1": "FL1",
         "eredivisie": "DED",
         "championship": "ELC",
+        "primeira_liga": "PPL",
+        "scottish_premiership": "SPL",
+        "belgian_pro_league": "BJL",
         "ucl": "CL",
         "uel": "EL",
     }

@@ -81,15 +81,27 @@ class BaseModel(ABC):
             "btts": deque(maxlen=100)
         }
 
+    @staticmethod
+    def parse_datetime(date_value: Any) -> Optional[datetime]:
+        """Parse ISO date strings into naive datetime objects."""
+        if isinstance(date_value, datetime):
+            dt = date_value
+        elif isinstance(date_value, str):
+            try:
+                dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+            except ValueError:
+                try:
+                    dt = datetime.fromisoformat(date_value)
+                except Exception:
+                    return None
+        else:
+            return None
+
+        return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
     # --------------------------------------------------------------------------
     # Core abstract methods (must be implemented by child)
     # --------------------------------------------------------------------------
-
-    @abstractmethod
-    async def predict(self, features: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Predict multiple markets for a match.
-        
         Returns:
         {
             # Required for all models

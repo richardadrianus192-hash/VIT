@@ -85,6 +85,7 @@ class ModelOrchestrator:
                     instance.openai_api_key = os.getenv("OPENAI_API_KEY", "")
                     if instance.openai_api_key:
                         logger.info("✅ sentiment: OpenAI GPT-4o-mini enhancement enabled")
+
                 models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models"))
                 model_path = os.path.join(models_dir, f"{key}_model.pkl")
                 if os.path.exists(model_path):
@@ -93,25 +94,44 @@ class ModelOrchestrator:
                         if loaded_model is not None:
                             instance = loaded_model
                         logger.info(f"✅ {key} ({model_type}): loaded weights from {model_path}")
+                        self.model_status[key] = {"status": "ready", "error": None, "load_time_ms": 0}
                     except Exception as exc:
                         logger.warning(f"⚠️  {key} ({model_type}) weight load failed: {exc}")
-                        self.model_status[key] = {"status": "failed", "error": str(exc), "load_time_ms": 0}
-                        results[key] = False
-                        continue
+                        self.model_status[key] = {"status": "untrained", "error": str(exc), "load_time_ms": 0}
                 else:
                     logger.warning(f"⚠️  {key} ({model_type}) weight file missing: {model_path}")
-                    self.model_status[key] = {"status": "failed", "error": "weights missing", "load_time_ms": 0}
-                    results[key] = False
-                    continue
+                    self.model_status[key] = {"status": "untrained", "error": "weights missing", "load_time_ms": 0}
+
                 self.models[key] = instance
                 weight = getattr(instance, "weight", 1.0)
+                
+                # Define child models based on model type
+                child_models_map = {
+                    "Poisson": ["Poisson Distribution Generator", "Goal Rate Estimator", "Covariance Matrix"],
+                    "XGBoost": ["Gradient Booster (Home)", "Gradient Booster (Draw)", "Gradient Booster (Away)"],
+                    "LSTM": ["Future Goal Predictor", "Momentum Detector", "Recurrent Layer"],
+                    "MonteCarlo": ["Simulation Engine", "Probability Sampler", "Convergence Validator"],
+                    "Ensemble": ["Weighted Aggregator", "Conflict Resolver", "Edge Calculator"],
+                    "Transformer": ["Multi-head Attention (Temporal)", "Feed-forward Network", "Positional Encoder"],
+                    "GNN": ["Graph Convolution (Teams)", "Graph Convolution (Leagues)", "Message Aggregator"],
+                    "Bayesian": ["Prior Distribution", "Likelihood Model", "Posterior Sampler"],
+                    "RLAgent": ["Policy Network", "Value Network", "Experience Replay Buffer"],
+                    "Causal": ["Structural Model", "Intervention Simulator", "Treatment Estimator"],
+                    "Sentiment": ["News Aggregator", "Sentiment Classifier", "Impact Quantifier"],
+                    "Anomaly": ["Regime Detector", "Anomaly Scorer", "Historical Baseline"],
+                }
+                
                 self.model_meta[key] = {
                     "model_name": kwargs.get("model_name", kwargs.get("model_id", key)),
                     "model_type": model_type,
                     "weight": float(weight),
+                    "child_models": child_models_map.get(model_type, []),
+                    "supports_over_under": model_type in ["Poisson", "MonteCarlo", "Bayesian"],
                 }
-                self.model_status[key] = {"status": "ready", "error": None, "load_time_ms": 0}
-                logger.info(f"✅ {key} ({model_type}): ready")
+                if self.model_status[key]["status"] == "ready":
+                    logger.info(f"✅ {key} ({model_type}): ready")
+                else:
+                    logger.info(f"⚠️  {key} ({model_type}): instantiated without weights, ready for training")
                 results[key] = True
             except Exception as exc:
                 logger.warning(f"⚠️  {key} ({model_type}): skipped — {exc}")

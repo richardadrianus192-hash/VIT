@@ -115,7 +115,7 @@ async def lifespan(app: FastAPI):
     if bot_token and chat_id:
         try:
             telegram_alerts = TelegramAlert(bot_token, chat_id, enabled=True)
-            await telegram_alerts.send_startup_message()
+            # await telegram_alerts.send_startup_message()
             print("   ✅ Telegram Alerts: ENABLED")
         except Exception as e:
             print(f"   ⚠️ Telegram init failed: {e}")

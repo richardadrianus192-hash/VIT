@@ -147,9 +147,11 @@ export default function TrainingPanel({ apiKey }) {
 
         {startErr && <div style={{ marginBottom:12, padding:'8px 12px', background:'#fee2e2', borderRadius:8, color:'#b91c1c', fontSize:'0.85rem' }}>{startErr}</div>}
 
-        <button style={btnP} onClick={startTraining} disabled={starting || jobStatus==='running'}>
-          {starting ? 'Starting…' : jobStatus==='running' ? '⏳ Training in progress…' : '▶ Start Training'}
-        </button>
+        <div style={{ display:'flex', gap:12 }}>
+          <button style={btnP} onClick={startTraining} disabled={starting || jobStatus==='running'}>
+            {starting ? 'Starting…' : jobStatus==='running' ? '⏳ Training in progress…' : '▶ Start Training'}
+          </button>
+        </div>
       </div>
 
       {/* ── Live Progress ─────────────────────────────────────── */}
@@ -245,7 +247,54 @@ export default function TrainingPanel({ apiKey }) {
         }
         {promoteMsg && <div style={{ marginTop:10, fontSize:'0.85rem', color: promoteMsg.startsWith('✅')?'#15803d':'#b91c1c', fontWeight:600 }}>{promoteMsg}</div>}
       </div>
-
+      {/* ── Models Information with Child Models ─────────────── */}
+      <div style={card}>
+        <h3 style={title}>🤖 Model Architecture & Child Networks</h3>
+        <p style={{ fontSize:'0.85rem', color:'#64748b', marginTop:-8, marginBottom:16 }}>
+          Transparent view of all models, their types, and internal child networks.
+        </p>
+        
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))', gap:16 }}>
+          {/* Placeholder - will load from API in real component */}
+          <div style={{ padding:12, background:'#f8fafc', borderRadius:10, border:'1px solid #e2e8f0' }}>
+            <div style={{ fontSize:'0.9rem', fontWeight:700, marginBottom:8 }}>📊 Poisson</div>
+            <div style={{ fontSize:'0.75rem', color:'#64748b', marginBottom:6 }}>Type: Goal Prediction Model</div>
+            <div style={{ fontSize:'0.75rem', color:'#0f172a', fontWeight:600, marginBottom:4 }}>Child Networks:</div>
+            <ul style={{ fontSize:'0.75rem', color:'#475569', margin:'4px 0 0 16px', padding:0 }}>
+              <li>Poisson Distribution Generator</li>
+              <li>Goal Rate Estimator</li>
+              <li>Covariance Matrix</li>
+            </ul>
+          </div>
+          
+          <div style={{ padding:12, background:'#f8fafc', borderRadius:10, border:'1px solid #e2e8f0' }}>
+            <div style={{ fontSize:'0.9rem', fontWeight:700, marginBottom:8 }}>🎯 XGBoost</div>
+            <div style={{ fontSize:'0.75rem', color:'#64748b', marginBottom:6 }}>Type: Outcome Classifier</div>
+            <div style={{ fontSize:'0.75rem', color:'#0f172a', fontWeight:600, marginBottom:4 }}>Child Networks:</div>
+            <ul style={{ fontSize:'0.75rem', color:'#475569', margin:'4px 0 0 16px', padding:0 }}>
+              <li>Gradient Booster (Home)</li>
+              <li>Gradient Booster (Draw)</li>
+              <li>Gradient Booster (Away)</li>
+            </ul>
+          </div>
+          
+          <div style={{ padding:12, background:'#f8fafc', borderRadius:10, border:'1px solid #e2e8f0' }}>
+            <div style={{ fontSize:'0.9rem', fontWeight:700, marginBottom:8 }}>🎲 Monte Carlo</div>
+            <div style={{ fontSize:'0.75rem', color:'#64748b', marginBottom:6 }}>Type: Probabilistic Simulator</div>
+            <div style={{ fontSize:'0.75rem', color:'#0f172a', fontWeight:600, marginBottom:4 }}>Child Networks:</div>
+            <ul style={{ fontSize:'0.75rem', color:'#475569', margin:'4px 0 0 16px', padding:0 }}>
+              <li>Simulation Engine</li>
+              <li>Probability Sampler</li>
+              <li>Convergence Validator</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div style={{ marginTop:16, padding:12, background:'#fafaf0', borderRadius:8, fontSize:'0.8rem', color:'#475569' }}>
+          <strong>💡 Note:</strong> Each model contains specialized child networks that handle specific prediction aspects. 
+          Poisson, Monte Carlo, and Bayesian models provide over/under (O/U) goals predictions with specialized goal estimation child networks.
+        </div>
+      </div>
       {/* ── Compare Versions ──────────────────────────────────── */}
       {completedJobs.length >= 2 && (
         <div style={card}>

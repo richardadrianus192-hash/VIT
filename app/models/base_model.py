@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any, Union
 from uuid import uuid4
 from collections import deque
 import asyncio
+from datetime import datetime
 from enum import IntEnum
 import numpy as np
 
@@ -80,6 +81,24 @@ class BaseModel(ABC):
             "over_under": deque(maxlen=100),
             "btts": deque(maxlen=100)
         }
+
+    @staticmethod
+    def parse_datetime(date_value: Any) -> Optional[datetime]:
+        """Parse ISO date strings into naive datetime objects."""
+        if isinstance(date_value, datetime):
+            dt = date_value
+        elif isinstance(date_value, str):
+            try:
+                dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+            except ValueError:
+                try:
+                    dt = datetime.fromisoformat(date_value)
+                except Exception:
+                    return None
+        else:
+            return None
+
+        return dt.replace(tzinfo=None) if dt.tzinfo else dt
 
     # --------------------------------------------------------------------------
     # Core abstract methods (must be implemented by child)

@@ -97,6 +97,7 @@ class TimeAwareAttention(_NNBase):
 
         # Apply mask if provided
         if key_padding_mask is not None:
+            key_padding_mask = key_padding_mask.bool()
             scores = scores.masked_fill(key_padding_mask.unsqueeze(1), float('-inf'))
 
         # Softmax (now with time decay applied)
@@ -464,10 +465,7 @@ class TransformerSequenceModel(BaseModel):
             match_date = match.get('match_date')
             if match_date:
                 if isinstance(match_date, str):
-                    try:
-                        match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
-                    except:
-                        match_date = datetime.min
+                    match_date = self.parse_datetime(match_date) or datetime.min
                 if prev_date:
                     delta = (match_date - prev_date).days
                     log_delta = math.log1p(min(delta, 60)) / math.log1p(60)
@@ -509,10 +507,8 @@ class TransformerSequenceModel(BaseModel):
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
             if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
+                parsed = self.parse_datetime(date_str)
+                return parsed or datetime.min
             elif isinstance(date_str, datetime):
                 return date_str
             else:
@@ -652,10 +648,8 @@ class TransformerSequenceModel(BaseModel):
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
             if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
+                parsed = self.parse_datetime(date_str)
+                return parsed or datetime.min
             elif isinstance(date_str, datetime):
                 return date_str
             else:
@@ -692,7 +686,7 @@ class TransformerSequenceModel(BaseModel):
         # Optimizer with weight decay
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=1e-5)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=5, verbose=True
+            self.optimizer, mode='min', factor=0.5, patience=5
         )
 
         # Loss functions with class weights

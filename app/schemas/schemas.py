@@ -22,6 +22,24 @@ class ResultUpdate(BaseModel):
 
 
 # --- OUTPUT ---
+class ModelInsight(BaseModel):
+    model_name: str
+    model_type: str
+    model_weight: float
+    supported_markets: List[str]
+    home_prob: Optional[float]
+    draw_prob: Optional[float]
+    away_prob: Optional[float]
+    over_2_5_prob: Optional[float]
+    btts_prob: Optional[float]
+    home_goals_expectation: Optional[float]
+    away_goals_expectation: Optional[float]
+    confidence: Dict[str, float]
+    latency_ms: Optional[int]
+    failed: bool
+    error: Optional[str]
+
+
 class PredictionResponse(BaseModel):
     match_id: int
     home_prob: float
@@ -36,6 +54,21 @@ class PredictionResponse(BaseModel):
     edge: float
     confidence: float
     timestamp: datetime
+    
+    # Enhanced Intelligence Data
+    models_used: int
+    models_total: int
+    data_source: str
+    bet_side: Optional[str]
+    entry_odds: Optional[float]
+    raw_edge: Optional[float]
+    normalized_edge: Optional[float]
+    vig_free_edge: Optional[float]
+    model_weights: Dict[str, float]
+    model_insights: List[ModelInsight]
+    neural_consensus_score: float
+    intelligence_rating: str
+    prediction_accuracy_estimate: float
 
 
 class CLVResponse(BaseModel):

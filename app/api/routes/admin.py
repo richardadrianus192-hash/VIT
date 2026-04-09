@@ -66,6 +66,11 @@ COMPETITIONS = {
     "la_liga":        "PD",
     "bundesliga":     "BL1",
     "ligue_1":        "FL1",
+    "championship":   "ELC",
+    "eredivisie":     "DED",
+    "primeira_liga":  "PPL",
+    "scottish_premiership": "SPL",
+    "belgian_pro_league": "BJL",
 }
 
 
@@ -736,6 +741,11 @@ async def _fetch_fixtures(count: int) -> list:
         "bundesliga":     "soccer_germany_bundesliga",
         "serie_a":        "soccer_italy_serie_a",
         "ligue_1":        "soccer_france_ligue_one",
+        "championship":   "soccer_england_championship",
+        "eredivisie":     "soccer_netherlands_eredivisie",
+        "primeira_liga":  "soccer_portugal_primeira_liga",
+        "scottish_premiership": "soccer_scotland_premiership",
+        "belgian_pro_league": "soccer_belgium_jupiler_pro_league",
     }
 
     if odds_key and fixtures:

@@ -562,10 +562,8 @@ class GNNModel(BaseModel):
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
             if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
+                parsed = self.parse_datetime(date_str)
+                return parsed or datetime.min
             elif isinstance(date_str, datetime):
                 return date_str
             else:

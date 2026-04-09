@@ -10,6 +10,7 @@ except ImportError:
     xgb = None
 from typing import Dict, List, Optional, Any, Tuple
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 class XGBoostOutcomeClassifier:
     def __init__(self, model_id: str):
@@ -45,9 +46,12 @@ class XGBoostOutcomeClassifier:
         return np.array(X), np.array(y)
 
     def train(self, matches: List[Dict]):
-        if not matches: return
+        if not matches:
+            return {"status": "no_data", "accuracy": 0.0}
+
         X, y = self._prepare_data(matches)
-        if len(X) < 10: return
+        if len(X) < 10:
+            return {"status": "insufficient_data", "accuracy": 0.0}
 
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -58,6 +62,11 @@ class XGBoostOutcomeClassifier:
             verbose=False
         )
         self.is_trained = True
+
+        y_pred = self.model.predict(X_val)
+        val_acc = float(accuracy_score(y_val, y_pred)) if len(y_val) > 0 else 0.0
+
+        return {"status": "trained", "accuracy": val_acc}
 
     def predict(self, match: Dict) -> Dict:
         if not self.is_trained:

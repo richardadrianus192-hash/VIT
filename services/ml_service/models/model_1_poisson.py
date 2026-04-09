@@ -81,12 +81,19 @@ class PoissonGoalModel(BaseModel):
         # Always certified (uses scipy which is core)
         self.certified = True
     
+    def _parse_datetime(self, date_value: Any) -> Optional[datetime]:
+        return self.parse_datetime(date_value)
+
     def _get_time_weight(self, match_date: datetime) -> float:
         """Calculate exponential decay weight based on match age."""
-        if self.last_trained_date is None:
+        if self.last_trained_date is None or match_date is None:
             return 1.0
-        
-        days_ago = (self.last_trained_date - match_date).days
+
+        try:
+            days_ago = (self.last_trained_date - match_date).days
+        except Exception:
+            return 1.0
+
         if days_ago <= 0:
             return 1.0
         
@@ -117,15 +124,8 @@ class PoissonGoalModel(BaseModel):
         # Sort by date (oldest first)
         def get_date_key(match):
             date_str = match.get('match_date', '1900-01-01')
-            if isinstance(date_str, str):
-                try:
-                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except:
-                    return datetime.min
-            elif isinstance(date_str, datetime):
-                return date_str
-            else:
-                return datetime.min
+            parsed = self._parse_datetime(date_str)
+            return parsed or datetime.min
         
         matches_sorted = sorted(matches, key=get_date_key)
         
@@ -140,7 +140,9 @@ class PoissonGoalModel(BaseModel):
         if use_time_weights and train_matches:
             last_date_str = train_matches[-1].get('match_date')
             if last_date_str:
-                self.last_trained_date = datetime.fromisoformat(last_date_str)
+                parsed_date = self._parse_datetime(last_date_str)
+                if parsed_date:
+                    self.last_trained_date = parsed_date
         
         # Collect all teams
         teams = set()
@@ -176,11 +178,9 @@ class PoissonGoalModel(BaseModel):
             # Get time weight
             weight = 1.0
             if use_time_weights and 'match_date' in match:
-                try:
-                    match_date = datetime.fromisoformat(match['match_date'])
+                match_date = self._parse_datetime(match['match_date'])
+                if match_date is not None:
                     weight = self._get_time_weight(match_date)
-                except (ValueError, TypeError):
-                    pass
             
             # Home team stats
             team_stats[home]['home_gf'] += hg * weight
