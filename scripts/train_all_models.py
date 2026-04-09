@@ -85,7 +85,10 @@ class ModelTrainer:
                 result = model.train(self.matches)
             
             # Save model
-            model_path = f"/workspaces/vit-predict/models/{name}_model.pkl"
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            model_dir = os.path.join(project_root, "models")
+            os.makedirs(model_dir, exist_ok=True)
+            model_path = os.path.join(model_dir, f"{name}_model.pkl")
             model.save(model_path)
             logger.info(f"✅ {name} trained and saved to {model_path}")
             

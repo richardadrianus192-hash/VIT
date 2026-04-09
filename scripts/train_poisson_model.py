@@ -92,7 +92,10 @@ def train_poisson_model():
     logger.info(".3f")
 
     # Save model
-    model_path = "/workspaces/vit-predict/models/poisson_model.pkl"
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    model_dir = os.path.join(project_root, "models")
+    os.makedirs(model_dir, exist_ok=True)
+    model_path = os.path.join(model_dir, "poisson_model.pkl")
     model.save(model_path)
     logger.info(f"Model saved to {model_path}")
 

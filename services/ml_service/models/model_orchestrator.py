@@ -85,6 +85,19 @@ class ModelOrchestrator:
                     instance.openai_api_key = os.getenv("OPENAI_API_KEY", "")
                     if instance.openai_api_key:
                         logger.info("✅ sentiment: OpenAI GPT-4o-mini enhancement enabled")
+                models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models"))
+                model_path = os.path.join(models_dir, f"{key}_model.pkl")
+                if os.path.exists(model_path):
+                    try:
+                        loaded_model = instance.load(model_path)
+                        if loaded_model is not None:
+                            instance = loaded_model
+                        logger.info(f"✅ {key} ({model_type}): loaded weights from {model_path}")
+                    except Exception as exc:
+                        logger.warning(f"⚠️  {key} ({model_type}) weight load failed: {exc}")
+                        self.model_status[key] = {"status": "failed", "error": str(exc), "load_time_ms": 0}
+                        results[key] = False
+                        continue
                 self.models[key] = instance
                 weight = getattr(instance, "weight", 1.0)
                 self.model_meta[key] = {
