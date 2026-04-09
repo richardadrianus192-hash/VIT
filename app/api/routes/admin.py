@@ -19,6 +19,8 @@ import io
 import json
 import logging
 import os
+import zipfile
+import shutil
 from datetime import datetime, timezone, timedelta
 from itertools import combinations
 from typing import List, Optional
@@ -337,6 +339,90 @@ async def upload_csv_fixtures(
         "errors":    len(errors),
         "results":   results,
         "error_details": errors,
+    }
+
+
+# ======================================================================
+# v3.1.0 — MODEL WEIGHTS UPLOAD
+# ======================================================================
+
+MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "models")
+DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "data")
+
+@router.post("/upload/models")
+async def upload_model_weights(
+    api_key: str = Query(...),
+    file: UploadFile = File(...),
+):
+    """
+    Accept a vit_models.zip produced by the Colab training notebook.
+    Extracts .pkl files into the models/ directory and
+    historical_matches.json into data/, then reloads the orchestrator.
+    """
+    _verify_key(api_key)
+
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=422, detail="File must be a .zip (from the Colab training notebook)")
+
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    content = await file.read()
+    saved_models = []
+    saved_data   = []
+    skipped      = []
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            for member in zf.namelist():
+                basename = os.path.basename(member)
+                if not basename:
+                    continue
+
+                # .pkl files → models/
+                if basename.endswith(".pkl"):
+                    dest = os.path.join(MODELS_DIR, basename)
+                    with zf.open(member) as src, open(dest, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    saved_models.append(basename)
+                    logger.info(f"📦 Saved model weight: {basename}")
+
+                # historical_matches.json → data/
+                elif basename == "historical_matches.json":
+                    dest = os.path.join(DATA_DIR, basename)
+                    with zf.open(member) as src, open(dest, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    saved_data.append(basename)
+                    logger.info(f"📊 Saved training data: {basename}")
+
+                else:
+                    skipped.append(basename)
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail="Invalid zip file — please re-download from Colab")
+    except Exception as e:
+        logger.error(f"Model upload failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Reload orchestrator so new weights are picked up immediately
+    reload_results = {}
+    models_ready   = 0
+    if orchestrator is not None and saved_models:
+        try:
+            reload_results = orchestrator.load_all_models()
+            models_ready   = sum(1 for v in reload_results.values() if v)
+            logger.info(f"♻️  Orchestrator reloaded: {models_ready}/{len(reload_results)} models ready")
+        except Exception as e:
+            logger.warning(f"Orchestrator reload failed after upload: {e}")
+
+    return {
+        "message":      f"Upload complete — {len(saved_models)} model file(s) saved, {models_ready} models now active",
+        "saved_models": saved_models,
+        "saved_data":   saved_data,
+        "skipped":      skipped,
+        "models_ready": models_ready,
+        "models_total": 12,
+        "reload_results": reload_results,
     }
 
 

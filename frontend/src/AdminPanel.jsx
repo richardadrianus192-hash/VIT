@@ -8,6 +8,7 @@ import {
   fetchDataSourceStatus,
   addManualMatch,
   uploadCSVFixtures,
+  uploadModelWeights,
   API_KEY,
 } from './api'
 
@@ -118,6 +119,13 @@ export default function AdminPanel({ apiKey }) {
   const [manualLoading, setManualLoad]  = useState(false)
   const [manualError, setManualError]   = useState('')
 
+  // Model weights upload
+  const [modelZip, setModelZip]         = useState(null)
+  const [modelUploadResult, setModelUploadResult] = useState(null)
+  const [modelUploading, setModelUploading] = useState(false)
+  const [modelUploadError, setModelUploadError] = useState('')
+  const modelFileRef = useRef(null)
+
   // CSV upload
   const [csvFile, setCsvFile]       = useState(null)
   const [csvResult, setCsvResult]   = useState(null)
@@ -182,6 +190,18 @@ export default function AdminPanel({ apiKey }) {
       setManualResult(r)
     } catch (e) { setManualError(e.message) }
     finally { setManualLoad(false) }
+  }
+
+  async function submitModelUpload() {
+    if (!modelZip) return
+    setModelUploading(true); setModelUploadError(''); setModelUploadResult(null)
+    try {
+      const r = await uploadModelWeights(key, modelZip)
+      setModelUploadResult(r)
+      loadModelStatus()
+    }
+    catch (e) { setModelUploadError(e.message) }
+    finally { setModelUploading(false) }
   }
 
   async function submitCSV() {
@@ -347,6 +367,82 @@ export default function AdminPanel({ apiKey }) {
                 <div key={l}><span style={{ color: '#64748b' }}>{l}: </span><strong>{v}</strong></div>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Model Weights Upload ─────────────────────────────────── */}
+      <div style={card}>
+        <h3 style={sectionTitle}>🧠 Upload Trained Model Weights</h3>
+        <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: -8, marginBottom: 12 }}>
+          After training in Google Colab, upload the <code>vit_models.zip</code> file here.
+          Models will be extracted and activated immediately — no restart needed.
+        </p>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 14, fontSize: '0.82rem', color: '#475569' }}>
+          <strong>Expected zip contents:</strong>
+          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {['poisson_model.pkl','xgboost_model.pkl','lstm_model.pkl','monte_carlo_model.pkl',
+              'ensemble_model.pkl','transformer_model.pkl','gnn_model.pkl','bayesian_model.pkl',
+              'rl_agent_model.pkl','causal_model.pkl','sentiment_model.pkl','anomaly_model.pkl',
+              'historical_matches.json'].map(f => (
+              <span key={f} style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 7px', fontSize: '0.75rem', fontFamily: 'monospace' }}>{f}</span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input ref={modelFileRef} type="file" accept=".zip" style={{ display: 'none' }}
+            onChange={e => { setModelZip(e.target.files[0]); setModelUploadResult(null); setModelUploadError('') }} />
+          <button style={btnSecondary} onClick={() => modelFileRef.current.click()}>
+            📂 {modelZip ? modelZip.name : 'Choose vit_models.zip'}
+          </button>
+          <button style={btnPrimary} onClick={submitModelUpload} disabled={!modelZip || modelUploading}>
+            {modelUploading ? 'Uploading & activating…' : '🚀 Upload & Activate Models'}
+          </button>
+          {modelZip && !modelUploading && (
+            <button style={{ ...btnSecondary, padding: '9px 14px' }}
+              onClick={() => { setModelZip(null); setModelUploadResult(null); setModelUploadError(''); modelFileRef.current.value = '' }}>
+              ✕ Clear
+            </button>
+          )}
+        </div>
+
+        {modelUploading && (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, color: '#0ea5e9', fontSize: '0.85rem' }}>
+            <div style={{ width: 16, height: 16, border: '2px solid #e0f2fe', borderTop: '2px solid #0ea5e9', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            Extracting files and loading models into memory…
+          </div>
+        )}
+
+        {modelUploadError && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: '#fee2e2', borderRadius: 8, color: '#b91c1c', fontSize: '0.85rem' }}>
+            {modelUploadError}
+          </div>
+        )}
+
+        {modelUploadResult && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, color: '#15803d', marginBottom: 6 }}>✅ {modelUploadResult.message}</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: '0.82rem' }}>
+                <span style={badge('green')}>{modelUploadResult.models_ready}/{modelUploadResult.models_total} models active</span>
+                {modelUploadResult.saved_data?.length > 0 && <span style={badge('blue')}>📊 Training data saved</span>}
+              </div>
+            </div>
+            {modelUploadResult.saved_models?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>FILES INSTALLED</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {modelUploadResult.saved_models.map(f => (
+                    <span key={f} style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '2px 8px', fontSize: '0.75rem', fontFamily: 'monospace' }}>✓ {f}</span>
+                  ))}
+                  {modelUploadResult.saved_data?.map(f => (
+                    <span key={f} style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: 4, padding: '2px 8px', fontSize: '0.75rem', fontFamily: 'monospace' }}>✓ {f}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

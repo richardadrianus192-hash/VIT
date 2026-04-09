@@ -67,6 +67,18 @@ export async function uploadCSVFixtures(apiKey, file) {
   return res.json()
 }
 
+// ── v3.1.0 — Model Weights Upload ────────────────────────────────────
+export async function uploadModelWeights(apiKey, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(
+    `${API_BASE_URL}/admin/upload/models?api_key=${encodeURIComponent(apiKey)}`,
+    { method: 'POST', headers: { 'x-api-key': API_KEY }, body: formData }
+  )
+  if (!res.ok) throw new Error(await res.text() || 'Upload failed')
+  return res.json()
+}
+
 // ── v2.3.0 — Accumulator ─────────────────────────────────────────────
 export async function fetchAccumulatorCandidates(apiKey, { minConfidence = 0.60, minEdge = 0.01, count = 15 } = {}) {
   return apiFetch(
