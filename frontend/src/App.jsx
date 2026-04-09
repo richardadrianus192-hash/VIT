@@ -15,7 +15,6 @@ import './App.css'
 const DEFAULT_FORM = {
   home_team: '', away_team: '', league: 'premier_league',
   kickoff_time: new Date().toISOString().slice(0, 16),
-  home: 2.0, draw: 3.2, away: 3.8,
 }
 
 const LEAGUES = [
@@ -122,9 +121,7 @@ export default function App() {
 
   const PER_PAGE = 10
 
-  const marketOdds = useMemo(() => ({
-    home: parseFloat(form.home), draw: parseFloat(form.draw), away: parseFloat(form.away),
-  }), [form.home, form.draw, form.away])
+  /* Market odds are fetched from OddsPanel instead of manual entry */
 
   /* Auto-close sidebar on desktop resize */
   useEffect(() => {
@@ -170,7 +167,7 @@ export default function App() {
         away_team:    form.away_team.trim(),
         league:       form.league,
         kickoff_time: new Date(form.kickoff_time).toISOString(),
-        market_odds:  marketOdds,
+        market_odds:  {},
       })
       setPred(res)
       await loadHistory()
@@ -350,19 +347,6 @@ export default function App() {
                     <label htmlFor="kickoff">Kickoff Time</label>
                     <input id="kickoff" type="datetime-local" value={form.kickoff_time}
                       onChange={e => field('kickoff_time', e.target.value)} required />
-                  </div>
-                </div>
-
-                <div>
-                  <span className="section-label">Market Odds</span>
-                  <div className="odds-grid">
-                    {['home', 'draw', 'away'].map(k => (
-                      <div key={k} className="field">
-                        <label htmlFor={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</label>
-                        <input id={k} type="number" min="1.01" step="0.01" value={form[k]}
-                          onChange={e => field(k, e.target.value)} required />
-                      </div>
-                    ))}
                   </div>
                 </div>
 
