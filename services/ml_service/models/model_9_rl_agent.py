@@ -536,9 +536,9 @@ class RLPolicyAgent(BaseModel):
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Convert to tensors
-        states = torch.FloatTensor(np.array(self.buffer.states)).to(self.device)
-        actions = torch.FloatTensor(np.array(self.buffer.actions)).to(self.device)
-        old_log_probs = torch.FloatTensor(np.array(self.buffer.log_probs)).to(self.device)
+        states = torch.stack([torch.FloatTensor(s).detach() for s in self.buffer.states]).to(self.device)
+        actions = torch.FloatTensor([a for a in self.buffer.actions]).to(self.device)
+        old_log_probs = torch.FloatTensor([lp for lp in self.buffer.log_probs]).to(self.device)
         advantages = torch.FloatTensor(advantages).to(self.device)
         returns = torch.FloatTensor(returns).to(self.device)
 

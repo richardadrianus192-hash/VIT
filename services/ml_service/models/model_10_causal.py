@@ -218,6 +218,11 @@ class CausalInferenceModel(BaseModel):
         confounders = [c for c in self.pre_treatment_confounders if c in df.columns]
 
         try:
+            # Check if treatment has variance
+            if df[treatment].nunique() < 2:
+                logger.warning(f"Treatment {treatment} has no variance (all same value), skipping")
+                return False
+            
             ps_model.fit(df[confounders], df[treatment])
             ps = ps_model.predict_proba(df[confounders])[:, 1]
 

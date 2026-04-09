@@ -186,7 +186,17 @@ class BayesianHierarchicalModel(BaseModel):
             league_idx.append(league_to_idx.get(match.get('league', 'default'), 0))
             home_goals.append(match['home_goals'])
             away_goals.append(match['away_goals'])
-            match_dates.append(match.get('match_date', current_date))
+            
+            match_date = match.get('match_date')
+            if match_date:
+                if isinstance(match_date, str):
+                    try:
+                        match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                    except:
+                        match_date = current_date
+            else:
+                match_date = current_date
+            match_dates.append(match_date)
 
         # Compute time weights
         time_weights = self._compute_time_weights(match_dates, current_date)

@@ -381,7 +381,10 @@ class PoissonGoalModel(BaseModel):
             
             # Market edge (if odds provided)
             "edge_vs_market": edge,
-            "has_market_edge": edge.get("has_edge", False)
+            "has_market_edge": edge.get("has_edge", False),
+            
+            # Supported markets
+            "supported_markets": [m.name.lower() for m in self.supported_markets]
         }
     
     def get_confidence_score(self, market: str = "1x2") -> float:

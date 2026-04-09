@@ -549,6 +549,12 @@ class GNNModel(BaseModel):
         validation_split: float = 0.2
     ) -> Dict[str, Any]:
         """Train GNN on league graph data."""
+        if not TORCH_AVAILABLE:
+            return {"error": "PyTorch not available"}
+        
+        if not hasattr(self, 'GCNConv') or GCNConv is None:
+            return {"error": "PyTorch Geometric not available"}
+        
         if not matches:
             return {"error": "No training data"}
 

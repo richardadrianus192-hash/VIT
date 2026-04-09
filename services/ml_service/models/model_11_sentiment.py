@@ -169,8 +169,21 @@ class SentimentFusionModel(BaseModel):
         # Always certified (has fallback logic)
         self.certified = True
 
-    def _is_pre_match(self, post_date: datetime, match_date: datetime) -> bool:
+    def _is_pre_match(self, post_date, match_date) -> bool:
         """Check if post is within pre-match window."""
+        # Ensure both are datetime objects
+        if isinstance(post_date, str):
+            try:
+                post_date = datetime.fromisoformat(post_date.replace('Z', '+00:00'))
+            except:
+                return False
+        
+        if isinstance(match_date, str):
+            try:
+                match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+            except:
+                return False
+        
         hours_before = (match_date - post_date).total_seconds() / 3600
         return 0 < hours_before <= self.config.lookback_hours
 

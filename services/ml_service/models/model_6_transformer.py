@@ -462,13 +462,21 @@ class TransformerSequenceModel(BaseModel):
 
             # Calculate time delta (log scaled)
             match_date = match.get('match_date')
-            if match_date and prev_date:
-                delta = (match_date - prev_date).days
-                log_delta = math.log1p(min(delta, 60)) / math.log1p(60)
-                time_deltas.append(log_delta)
+            if match_date:
+                if isinstance(match_date, str):
+                    try:
+                        match_date = datetime.fromisoformat(match_date.replace('Z', '+00:00'))
+                    except:
+                        match_date = datetime.min
+                if prev_date:
+                    delta = (match_date - prev_date).days
+                    log_delta = math.log1p(min(delta, 60)) / math.log1p(60)
+                    time_deltas.append(log_delta)
+                else:
+                    time_deltas.append(0)
+                prev_date = match_date
             else:
                 time_deltas.append(0)
-            prev_date = match_date
 
         # Pad or truncate
         seq_len = len(features)

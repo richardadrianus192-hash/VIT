@@ -17,6 +17,7 @@ except ImportError:
     nn = None
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.isotonic import IsotonicRegression
+from sklearn.preprocessing import StandardScaler
 
 from app.models.base_model import BaseModel, MarketType, Session
 
@@ -724,7 +725,8 @@ class LSTMMomentumNetworkModel(BaseModel):
             },
             "momentum_factor": momentum_factor,
             "edge_vs_market": edge,
-            "has_market_edge": edge.get("has_edge", False)
+            "has_market_edge": edge.get("has_edge", False),
+            "supported_markets": [m.name.lower() for m in self.supported_markets]
         }
     
     def _calculate_edge(
