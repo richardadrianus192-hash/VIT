@@ -232,6 +232,25 @@ class ModelOrchestrator:
             weight = meta.get("weight", 1.0)
             t0 = time.monotonic()
 
+            # Skip models that have never been trained — they return hardcoded
+            # fallback values identical for every match, which pollutes the ensemble
+            # and makes all predictions look the same.
+            trained_count = getattr(model, "trained_matches_count", None)
+            is_trained_flag = getattr(model, "is_trained", None)
+            model_is_untrained = (
+                (trained_count is not None and trained_count == 0) or
+                (is_trained_flag is not None and is_trained_flag is False)
+            )
+            if model_is_untrained:
+                latency_ms = round((time.monotonic() - t0) * 1000, 1)
+                logger.debug(f"⏭️  {key} ({model_type}): skipped — not yet trained")
+                individual_results.append({
+                    "model_name": model_name, "model_type": model_type,
+                    "model_weight": weight, "supported_markets": [],
+                    "failed": True, "error": "not_trained", "latency_ms": latency_ms,
+                })
+                continue
+
             try:
                 result = model.predict(features)
                 raw = await result if asyncio.iscoroutine(result) else result
